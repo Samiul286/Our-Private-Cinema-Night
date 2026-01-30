@@ -37,7 +37,7 @@ export default function Chat({ messages, onSendMessage, currentUserId }: ChatPro
   };
 
   return (
-    <div className="flex flex-col h-full min-h-[500px] love-card bg-white shadow-love-lg">
+    <div className="flex flex-col h-full min-h-0 love-card bg-white shadow-love-lg">
       {/* Chat Header */}
       <div className="px-6 py-4 border-b border-couple-soft flex items-center justify-between bg-gradient-to-r from-white to-couple-soft/30">
         <div className="flex items-center gap-3">

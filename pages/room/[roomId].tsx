@@ -157,7 +157,7 @@ export default function Room() {
 
           {/* 2. Chat & Sidebar (Col 4) */}
           <div className="w-full lg:col-span-4 lg:order-2 lg:sticky lg:top-24 space-y-6 lg:space-y-10">
-            <div className="h-[320px] sm:h-[550px] lg:h-[calc(100vh-250px)]">
+            <div className="h-[250px] sm:h-[550px] lg:h-[calc(100vh-250px)]">
               <Chat
                 messages={messages}
                 onSendMessage={sendMessage}
