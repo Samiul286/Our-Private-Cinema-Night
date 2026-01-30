@@ -70,7 +70,6 @@ export default function VideoCall({ roomId, userId, users, onLeave, className = 
     };
 
     return (
-    return (
         <div className={`space-y-2 lg:space-y-4 ${className}`}>
             <div className="hidden lg:flex items-center justify-between px-2">
                 <div className="flex items-center gap-2">
