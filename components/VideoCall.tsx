@@ -89,7 +89,7 @@ export default function VideoCall({ roomId, userId, users, onLeave }: VideoCallP
                 <div className="grid grid-cols-2 gap-4">
                     {/* Local Video */}
                     <div className="flex flex-col gap-2">
-                        <div className="relative aspect-video rounded-[32px] overflow-hidden bg-couple-text shadow-love group border-4 border-white">
+                        <div className="relative aspect-video rounded-2xl overflow-hidden bg-black shadow-love group border-2 border-white">
                             <video
                                 ref={localVideoRef}
                                 autoPlay
@@ -115,7 +115,7 @@ export default function VideoCall({ roomId, userId, users, onLeave }: VideoCallP
                         const remoteUser = users.find(u => u.id === peerId);
                         return (
                             <div key={peerId} className="flex flex-col gap-2">
-                                <div className="relative aspect-video rounded-[32px] overflow-hidden bg-couple-deep shadow-love group border-4 border-white">
+                                <div className="relative aspect-video rounded-2xl overflow-hidden bg-black shadow-love group border-2 border-white">
                                     <RemoteVideo stream={stream} />
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                                 </div>
