@@ -5,9 +5,10 @@ interface ChatProps {
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
   currentUserId: string;
+  className?: string;
 }
 
-export default function Chat({ messages, onSendMessage, currentUserId }: ChatProps) {
+export default function Chat({ messages, onSendMessage, currentUserId, className = '' }: ChatProps) {
   const [newMessage, setNewMessage] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -37,7 +38,7 @@ export default function Chat({ messages, onSendMessage, currentUserId }: ChatPro
   };
 
   return (
-    <div className="flex flex-col h-full min-h-[500px] love-card bg-white shadow-love-lg">
+    <div className={`flex flex-col h-full bg-white shadow-love-lg ${className}`}>
       {/* Chat Header */}
       <div className="px-6 py-4 border-b border-couple-soft flex items-center justify-between bg-gradient-to-r from-white to-couple-soft/30">
         <div className="flex items-center gap-3">
