@@ -7,10 +7,9 @@ interface VideoCallProps {
     userId: string;
     users: User[];
     onLeave?: () => void;
-    className?: string;
 }
 
-export default function VideoCall({ roomId, userId, users, onLeave, className = '' }: VideoCallProps) {
+export default function VideoCall({ roomId, userId, users, onLeave }: VideoCallProps) {
     const {
         localStream,
         remoteStreams,
@@ -70,8 +69,8 @@ export default function VideoCall({ roomId, userId, users, onLeave, className = 
     };
 
     return (
-        <div className={`space-y-2 lg:space-y-4 ${className}`}>
-            <div className="hidden lg:flex items-center justify-between px-2">
+        <div className="space-y-4">
+            <div className="flex items-center justify-between px-2">
                 <div className="flex items-center gap-2">
                     <span className="text-xl">👩‍❤️‍👨</span>
                     <h3 className="font-extrabold text-[18px] text-couple-text">Our Private Space</h3>
@@ -82,15 +81,15 @@ export default function VideoCall({ roomId, userId, users, onLeave, className = 
             </div>
 
             {permissionError ? (
-                <div className="love-card p-4 lg:p-8 text-center bg-couple-soft/30 border-dashed border-2 border-couple-pink/20">
+                <div className="love-card p-8 text-center bg-couple-soft/30 border-dashed border-2 border-couple-pink/20">
                     <p className="text-couple-text font-bold mb-4">I can't see your beautiful face!</p>
                     <button onClick={() => window.location.reload()} className="love-button-primary px-6 h-10 inline-flex">Allow Access</button>
                 </div>
             ) : (
-                <div className="flex overflow-x-auto pb-1 gap-2 lg:gap-4 lg:grid lg:grid-cols-2 lg:pb-0 snap-x scrollbar-none items-center">
+                <div className="grid grid-cols-2 gap-4">
                     {/* Local Video */}
-                    <div className="flex flex-col gap-1 lg:gap-2 min-w-[100px] lg:min-w-0 snap-center shrink-0">
-                        <div className="relative aspect-[3/4] lg:aspect-video rounded-[16px] lg:rounded-[24px] overflow-hidden bg-couple-text shadow-love group border-2 lg:border-4 border-white">
+                    <div className="flex flex-col gap-2">
+                        <div className="relative aspect-video rounded-[32px] overflow-hidden bg-couple-text shadow-love group border-4 border-white">
                             <video
                                 ref={localVideoRef}
                                 autoPlay
@@ -102,13 +101,12 @@ export default function VideoCall({ roomId, userId, users, onLeave, className = 
 
                             {!isVideoEnabled && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-couple-text/80 backdrop-blur-sm">
-                                    <span className="text-2xl lg:text-4xl animate-heartbeat text-couple-pink">❤️</span>
+                                    <span className="text-4xl animate-heartbeat text-couple-pink">❤️</span>
                                 </div>
                             )}
                         </div>
-                        {/* Hide text on mobile to save space */}
-                        <div className="flex justify-center hidden lg:flex">
-                            <span className="text-[12px] font-black uppercase text-couple-pink shadow-sm">You</span>
+                        <div className="flex justify-center">
+                            <span className="text-[12px] font-black uppercase text-couple-pink shadow-sm">You (My Love)</span>
                         </div>
                     </div>
 
@@ -116,12 +114,12 @@ export default function VideoCall({ roomId, userId, users, onLeave, className = 
                     {Object.entries(remoteStreams).map(([peerId, stream]) => {
                         const remoteUser = users.find(u => u.id === peerId);
                         return (
-                            <div key={peerId} className="flex flex-col gap-1 lg:gap-2 min-w-[100px] lg:min-w-0 snap-center shrink-0">
-                                <div className="relative aspect-[3/4] lg:aspect-video rounded-[16px] lg:rounded-[24px] overflow-hidden bg-couple-deep shadow-love group border-2 lg:border-4 border-white">
+                            <div key={peerId} className="flex flex-col gap-2">
+                                <div className="relative aspect-video rounded-[32px] overflow-hidden bg-couple-deep shadow-love group border-4 border-white">
                                     <RemoteVideo stream={stream} />
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                                 </div>
-                                <div className="flex justify-center hidden lg:flex">
+                                <div className="flex justify-center">
                                     <span className="text-[12px] font-black uppercase text-couple-pink shadow-sm">{remoteUser?.username || 'Soulmate'}</span>
                                 </div>
                             </div>
@@ -130,17 +128,17 @@ export default function VideoCall({ roomId, userId, users, onLeave, className = 
 
                     {/* Placeholder for waiting */}
                     {Object.keys(remoteStreams).length === 0 && users.length > 1 && (
-                        <div className="relative aspect-[3/4] lg:aspect-video rounded-[16px] lg:rounded-[24px] overflow-hidden bg-couple-soft flex flex-col items-center justify-center border-2 border-white border-dashed min-w-[100px] lg:min-w-0 shrink-0">
-                            <div className="w-8 h-8 lg:w-12 lg:h-12 rounded-full border-2 border-couple-pink border-t-transparent animate-spin mb-1 lg:mb-3"></div>
-                            <span className="text-[8px] lg:text-[10px] font-black uppercase text-couple-pink text-center px-1">Waiting...</span>
+                        <div className="relative aspect-video rounded-[32px] overflow-hidden bg-couple-soft flex flex-col items-center justify-center border-4 border-white border-dashed">
+                            <div className="w-12 h-12 rounded-full border-2 border-couple-pink border-t-transparent animate-spin mb-3"></div>
+                            <span className="text-[10px] font-black uppercase text-couple-pink">Waiting for your love...</span>
                         </div>
                     )}
                 </div>
             )}
 
             {/* Control Strip */}
-            <div className="flex justify-center pt-1 lg:pt-2">
-                <div className="bg-white/80 backdrop-blur-xl p-1.5 lg:p-2.5 rounded-[20px] lg:rounded-[24px] border border-couple-soft flex items-center gap-2 lg:gap-4 px-3 lg:px-8 shadow-love-lg scale-90 lg:scale-100 origin-bottom">
+            <div className="flex justify-center pt-2">
+                <div className="bg-white/80 backdrop-blur-xl p-2 sm:p-2.5 rounded-[20px] sm:rounded-[24px] border border-couple-soft flex items-center gap-3 sm:gap-4 px-4 sm:px-8 shadow-love-lg">
                     <button
                         onClick={toggleAudio}
                         className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-[14px] sm:rounded-[18px] transition-all ${isAudioEnabled ? 'bg-couple-soft text-couple-text' : 'bg-couple-pink text-white shadow-lg shadow-couple-pink/40'}`}

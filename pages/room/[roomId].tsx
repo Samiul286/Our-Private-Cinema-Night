@@ -113,13 +113,13 @@ export default function Room() {
   };
 
   return (
-    <div className="fixed inset-0 lg:static lg:min-h-screen flex flex-col bg-couple-background font-love lg:pb-20 overflow-hidden lg:overflow-visible">
+    <div className="min-h-screen bg-couple-background font-love pb-20">
       <Head>
         <title>Our Cinema Night - {roomId}</title>
       </Head>
 
       {/* Love Nav Bar */}
-      <header className="love-nav-bar shrink-0 ring-1 ring-white/20 h-14 sm:h-16 px-3 sm:px-6 z-20 relative">
+      <header className="love-nav-bar ring-1 ring-white/20 h-14 sm:h-16 px-3 sm:px-6">
         <button
           onClick={() => { leaveRoom(); router.push('/'); }}
           className="flex items-center gap-1 sm:gap-2 text-couple-text font-bold hover:text-couple-pink transition-colors"
@@ -141,54 +141,54 @@ export default function Room() {
         </button>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto lg:px-6 lg:pt-10 lg:pb-10 overflow-hidden lg:overflow-visible">
-        <div className="flex flex-col lg:grid lg:grid-cols-12 lg:gap-10 items-start h-full lg:h-auto pb-4 lg:pb-0">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 sm:pt-10 animate-fade-up pb-10">
+        <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6 lg:gap-10 items-start">
 
-          {/* 1. Video Player Section */}
-          <div className="w-full lg:col-span-8 order-1 shrink-0 bg-couple-background lg:bg-transparent z-10 p-3 sm:p-0">
-            <VideoPlayer
-              videoState={videoState}
-              onStateChange={updateVideoState}
-              userId={userId}
-            />
+          {/* 1. Video Player (Col 8) */}
+          <div className="w-full lg:col-span-8 lg:order-1">
+            <div className="space-y-6">
+              <VideoPlayer
+                videoState={videoState}
+                onStateChange={updateVideoState}
+                userId={userId}
+              />
+            </div>
           </div>
 
-          {/* 2. Chat & Sidebar Section */}
-          <div className="w-full order-2 lg:order-2 lg:col-span-4 lg:row-span-2 lg:sticky lg:top-24 flex-1 lg:flex-none min-h-0 flex flex-col h-[40vh] lg:h-auto lg:max-h-[calc(100vh-150px)]">
-            {/* Sweet Talk - Smaller Chat */}
-            <div className="h-[40vh] lg:h-[350px] mb-4 lg:mb-6">
+          {/* 2. Chat & Sidebar (Col 4) */}
+          <div className="w-full lg:col-span-4 lg:order-2 lg:sticky lg:top-24 space-y-6 lg:space-y-10">
+            <div className="h-[320px] sm:h-[550px] lg:h-[calc(100vh-250px)]">
               <Chat
                 messages={messages}
                 onSendMessage={sendMessage}
                 currentUserId={userId}
-                className="h-full rounded-[24px] border border-couple-soft lg:border-none shadow-sm lg:shadow-love-lg mx-3 lg:mx-0"
               />
             </div>
 
-            {/* Togetherness Card - Desktop Only - Reduced Height */}
-            <div className="love-card p-4 hidden lg:block shrink-0">
-              <div className="flex items-center justify-between mb-4">
+            {/* Togetherness Card */}
+            <div className="love-card p-5 sm:p-6 hidden sm:block">
+              <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="font-black text-[14px] text-couple-text">Our Private Space</h3>
-                  <p className="text-[9px] font-black text-couple-pink uppercase tracking-widest">Always better with you</p>
+                  <h3 className="font-black text-[16px] sm:text-[18px] text-couple-text">Together Now</h3>
+                  <p className="text-[10px] font-black text-couple-pink uppercase tracking-widest">Always better with you</p>
                 </div>
-                <div className="bg-couple-soft text-couple-pink w-8 h-8 rounded-full flex items-center justify-center font-black text-sm">
+                <div className="bg-couple-soft text-couple-pink w-10 h-10 rounded-full flex items-center justify-center font-black">
                   {users.length}
                 </div>
               </div>
 
-              <div className="space-y-2 max-h-[200px] overflow-y-auto">
+              <div className="space-y-3">
                 {users.map((user) => (
-                  <div key={user.id} className="flex items-center justify-between p-2 rounded-[16px] bg-couple-soft/30 border border-white/40">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-couple-pink to-couple-deep flex items-center justify-center text-white font-black text-xs shadow-md">
+                  <div key={user.id} className="flex items-center justify-between p-3 rounded-[20px] bg-couple-soft/30 border border-white/40">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-couple-pink to-couple-deep flex items-center justify-center text-white font-black text-xs shadow-md">
                         {user.username.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <span className="font-bold text-[13px] block text-couple-text">
+                        <span className="font-bold text-[14px] block text-couple-text">
                           {user.username} {user.id === userId && "(Me)"}
                         </span>
-                        <span className="text-[9px] font-black text-couple-secondary opacity-60 uppercase tracking-tighter">
+                        <span className="text-[10px] font-black text-couple-secondary opacity-60 uppercase tracking-tighter">
                           {user.id === userId ? 'Directing' : 'Enjoying'}
                         </span>
                       </div>
@@ -202,9 +202,9 @@ export default function Room() {
             </div>
           </div>
 
-          {/* 3. Video Call Section */}
-          <div className="w-full lg:col-span-8 order-3 lg:order-3 shrink-0 p-3 lg:p-0 mt-2 lg:mt-0">
-            <div className="lg:love-card lg:p-6">
+          {/* 3. Video Call (Col 8) - Wraps to next row on desktop */}
+          <div className="w-full lg:col-span-8 lg:order-3">
+            <div className="love-card p-4 sm:p-6">
               <VideoCall
                 roomId={roomId as string}
                 userId={userId}
