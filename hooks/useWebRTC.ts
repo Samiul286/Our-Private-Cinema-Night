@@ -19,6 +19,7 @@ export const useWebRTC = (roomId: string, userId: string) => {
   const localStreamRef = useRef<MediaStream | null>(null);
   const reconnectTimeouts = useRef<{ [peerId: string]: NodeJS.Timeout }>({});
   const isPageVisible = useRef(true);
+  const initiatedCalls = useRef<Set<string>>(new Set());
 
   const configuration = {
     iceServers: [
@@ -46,6 +47,8 @@ export const useWebRTC = (roomId: string, userId: string) => {
         return newStates;
       });
     }
+    // Clear initiated call tracking
+    initiatedCalls.current.delete(peerId);
   }, []);
 
   const initializeMedia = useCallback(async () => {
@@ -84,31 +87,45 @@ export const useWebRTC = (roomId: string, userId: string) => {
   }, []);
 
   const createPeerConnection = useCallback((peerId: string) => {
+    console.log(`Creating peer connection for ${peerId}`);
+    
     // Check if we have an existing connection that works
     const existingPc = peerConnections.current[peerId];
-    if (existingPc && existingPc.connectionState !== 'closed' && existingPc.connectionState !== 'failed') {
-      return existingPc;
-    }
-
-    // If existing but bad, clean it up
     if (existingPc) {
+      const state = existingPc.connectionState;
+      console.log(`Existing connection state for ${peerId}: ${state}`);
+      
+      if (state === 'connected' || state === 'connecting') {
+        console.log(`Reusing existing connection for ${peerId}`);
+        return existingPc;
+      }
+      
+      // If existing but bad, clean it up
+      console.log(`Cleaning up bad connection for ${peerId}`);
       cleanupPeerConnection(peerId);
     }
 
+    console.log(`Creating new RTCPeerConnection for ${peerId}`);
     const peerConnection = new RTCPeerConnection(configuration);
 
     // Add local tracks
     const stream = localStreamRef.current;
     if (stream) {
+      console.log(`Adding ${stream.getTracks().length} local tracks to peer connection`);
       stream.getTracks().forEach(track => {
+        console.log(`Adding ${track.kind} track to peer ${peerId}`);
         peerConnection.addTrack(track, stream);
       });
+    } else {
+      console.warn(`No local stream available when creating peer connection for ${peerId}`);
     }
 
     // Handle remote tracks
     peerConnection.ontrack = (event) => {
+      console.log(`Received ${event.track.kind} track from ${peerId}`);
       const [remoteStream] = event.streams;
       if (remoteStream) {
+        console.log(`Setting remote stream for ${peerId}`);
         setRemoteStreams(prev => ({
           ...prev,
           [peerId]: remoteStream
@@ -119,6 +136,7 @@ export const useWebRTC = (roomId: string, userId: string) => {
     // Handle ICE candidates
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
+        console.log(`Sending ICE candidate to ${peerId}`);
         socket.emit('signal', {
           roomId,
           to: peerId,
@@ -131,13 +149,19 @@ export const useWebRTC = (roomId: string, userId: string) => {
       }
     };
 
+    peerConnection.oniceconnectionstatechange = () => {
+      console.log(`ICE connection state for ${peerId}: ${peerConnection.iceConnectionState}`);
+    };
+
     peerConnection.onconnectionstatechange = () => {
       const state = peerConnection.connectionState;
+      console.log(`Connection state for ${peerId}: ${state}`);
       setConnectionStates(prev => ({
         ...prev,
         [peerId]: state
       }));
       if (state === 'failed' || state === 'closed') {
+        console.log(`Connection ${state} for ${peerId}, cleaning up`);
         cleanupPeerConnection(peerId);
       }
     };
@@ -158,32 +182,33 @@ export const useWebRTC = (roomId: string, userId: string) => {
 
       try {
         if (type === 'offer') {
-          // If we receive an offer, we should accept it.
-          // If we have an existing connection, it might be a glare or Renegotiation.
-          // Since we have a strict "who initiates" logic in VideoCall.tsx, if we receive an offer, 
-          // we are likely the "receiver" side (or glare causing reset).
-          // Safest strategy for this app: Always accept new offer by resetting/using appropriate PC.
-
-          // Simplify: always use createPeerConnection which ensures valid state
+          console.log(`Processing offer from ${peerId}`);
+          
+          // Create or get peer connection
           let peerConnection = createPeerConnection(peerId);
 
-          if (!peerConnection) return;
+          if (!peerConnection) {
+            console.error('Failed to create peer connection');
+            return;
+          }
 
-          // Avoid "OperationError: Failed to set remote offer sdp: Called in wrong state: kStable"
-          // If we are already stable, we can accept offer. 
-          // If we have local offer (glare), we need to decide. 
-          // But our strict initiator logic should prevent most glares unless network race.
-
-          // Re-create PC if we are in a bad state
-          if (peerConnection.signalingState !== 'stable' && peerConnection.signalingState !== 'have-remote-offer') {
-            // Hard reset if checking state is too complex for this snippet
-            // Ideally we just setRemoteDescription.
-            // If it fails, catch block catches it.
+          // Check signaling state before setting remote description
+          console.log(`Current signaling state: ${peerConnection.signalingState}`);
+          
+          if (peerConnection.signalingState !== 'stable') {
+            console.log(`Resetting peer connection due to signaling state: ${peerConnection.signalingState}`);
+            cleanupPeerConnection(peerId);
+            peerConnection = createPeerConnection(peerId);
           }
 
           await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+          console.log(`Set remote description for ${peerId}`);
+          
           const answer = await peerConnection.createAnswer();
+          console.log(`Created answer for ${peerId}`);
+          
           await peerConnection.setLocalDescription(answer);
+          console.log(`Set local description for ${peerId}`);
 
           socket.emit('signal', {
             roomId,
@@ -194,28 +219,41 @@ export const useWebRTC = (roomId: string, userId: string) => {
               data: answer
             }
           });
+          console.log(`Sent answer to ${peerId}`);
 
         } else if (type === 'answer') {
+          console.log(`Processing answer from ${peerId}`);
           const peerConnection = peerConnections.current[peerId];
-          if (peerConnection) {
-            if (peerConnection.signalingState === 'have-local-offer') {
-              await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
-            } else {
-              console.warn(`Received answer in ${peerConnection.signalingState} state - ignoring`);
-            }
+          
+          if (!peerConnection) {
+            console.warn(`No peer connection found for ${peerId}`);
+            return;
           }
+
+          console.log(`Current signaling state: ${peerConnection.signalingState}`);
+          
+          if (peerConnection.signalingState === 'have-local-offer') {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+            console.log(`Set remote description (answer) for ${peerId}`);
+          } else {
+            console.warn(`Received answer in ${peerConnection.signalingState} state - ignoring`);
+          }
+          
         } else if (type === 'ice-candidate') {
           const peerConnection = peerConnections.current[peerId];
           if (peerConnection) {
             try {
               await peerConnection.addIceCandidate(new RTCIceCandidate(data));
+              console.log(`Added ICE candidate from ${peerId}`);
             } catch (e) {
               console.warn("Error adding ICE candidate:", e);
             }
+          } else {
+            console.warn(`No peer connection found for ICE candidate from ${peerId}`);
           }
         }
       } catch (error) {
-        console.error(`Error handling signal ${type}:`, error);
+        console.error(`Error handling signal ${type} from ${peerId}:`, error);
       }
     };
 
@@ -223,14 +261,10 @@ export const useWebRTC = (roomId: string, userId: string) => {
 
     // Also listen for user disconnected to cleanup
     const handleUserDisconnected = (disconnectedUserId: string) => {
+      console.log(`Cleaning up connection for disconnected user: ${disconnectedUserId}`);
       cleanupPeerConnection(disconnectedUserId);
     };
     socket.on('user-disconnected', handleUserDisconnected);
-
-    // If a new user connects, we might want to initiate a call? 
-    // In the old code, `startCall` was manual?
-    // Let's check `startCall` usage.
-    // The old code had `startCall` which created an offer.
 
     return () => {
       socket.off('signal', handleSignal);
@@ -241,15 +275,35 @@ export const useWebRTC = (roomId: string, userId: string) => {
 
   const startCall = useCallback(async (peerId: string) => {
     if (!localStreamRef.current) {
-      console.warn('No local stream');
+      console.warn('No local stream available to start call');
+      return;
+    }
+
+    // Prevent duplicate call initiations
+    if (initiatedCalls.current.has(peerId)) {
+      console.log(`Call already initiated to ${peerId}, skipping`);
       return;
     }
 
     try {
+      console.log(`Starting call to ${peerId}`);
+      initiatedCalls.current.add(peerId);
+      
       const peerConnection = createPeerConnection(peerId);
+      
+      if (!peerConnection) {
+        console.error('Failed to create peer connection');
+        initiatedCalls.current.delete(peerId);
+        return;
+      }
+      
+      console.log(`Creating offer for ${peerId}`);
       const offer = await peerConnection.createOffer();
+      
+      console.log(`Setting local description for ${peerId}`);
       await peerConnection.setLocalDescription(offer);
 
+      console.log(`Sending offer to ${peerId}`);
       socket.emit('signal', {
         roomId,
         to: peerId,
@@ -259,8 +313,11 @@ export const useWebRTC = (roomId: string, userId: string) => {
           data: offer
         }
       });
+      
+      console.log(`Offer sent successfully to ${peerId}`);
     } catch (e) {
       console.error('Error starting call:', e);
+      initiatedCalls.current.delete(peerId);
     }
   }, [socket, roomId, userId, createPeerConnection]);
 
@@ -427,6 +484,7 @@ export const useWebRTC = (roomId: string, userId: string) => {
     initializeMedia,
     startCall,
     toggleVideo,
-    toggleAudio
+    toggleAudio,
+    reconnectPeer
   };
 };
