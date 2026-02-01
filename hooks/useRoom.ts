@@ -61,8 +61,8 @@ export const useRoom = (roomId: string, userId: string, username: string) => {
       socket.off('user-connected', handleUserConnected);
       socket.off('user-disconnected', handleUserDisconnected);
 
-      // Optional: emit leave-room if we want to handle explicit leaves
-      // but disconnect handles it usually.
+      // Emit leave-room when component unmounts
+      socket.emit('leave-room', { roomId, userId });
     };
   }, [socket, roomId, userId, username]);
 
@@ -91,10 +91,10 @@ export const useRoom = (roomId: string, userId: string, username: string) => {
   // Leave room currently handled by simple disconnect or unmount logic in server
   // But we can add an explicit one if needed.
   const leaveRoom = useCallback(() => {
-    // socket.disconnect(); // Don't disconnect socket as it might be used by other parts if SPA?
-    // But here we can just do nothing as unmount handles listeners
-    // Server handles disconnect.
-  }, []);
+    if (roomId && userId) {
+      socket.emit('leave-room', { roomId, userId });
+    }
+  }, [socket, roomId, userId]);
 
   return {
     videoState,

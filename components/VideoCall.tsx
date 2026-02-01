@@ -70,6 +70,18 @@ export default function VideoCall({ roomId, userId, users, onLeave }: VideoCallP
             return;
         }
 
+        // Get current user IDs
+        const currentUserIds = new Set(users.map(u => u.id));
+        
+        // Clean up tracking for users who are no longer in the room
+        const trackedUserIds = Array.from(callInitiatedFor.current);
+        trackedUserIds.forEach(trackedId => {
+            if (!currentUserIds.has(trackedId) && trackedId !== userId) {
+                console.log(`Removing tracking for disconnected user: ${trackedId}`);
+                callInitiatedFor.current.delete(trackedId);
+            }
+        });
+
         // Start calls with other users
         // Use ID comparison to determine who initiates the call to avoid glare (collision)
         // consistently: the user with the lower string ID initiates.
@@ -108,9 +120,17 @@ export default function VideoCall({ roomId, userId, users, onLeave }: VideoCallP
             }
         };
 
+        const handleUserDisconnected = (disconnectedUserId: string) => {
+            console.log(`User disconnected event in VideoCall: ${disconnectedUserId}`);
+            // Clean up the call tracking for this user
+            callInitiatedFor.current.delete(disconnectedUserId);
+        };
+
         socket.on('user-connected', handleUserConnected);
+        socket.on('user-disconnected', handleUserDisconnected);
         return () => {
             socket.off('user-connected', handleUserConnected);
+            socket.off('user-disconnected', handleUserDisconnected);
         };
     }, [localStream, userId, startCall, socket]);
 

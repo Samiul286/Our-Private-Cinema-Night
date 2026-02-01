@@ -95,9 +95,32 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('leave-room', ({ roomId, userId }) => {
+    console.log(`User ${userId} explicitly leaving room ${roomId}`);
+    
+    if (rooms[roomId] && rooms[roomId].users[userId]) {
+      const username = rooms[roomId].users[userId].username;
+      delete rooms[roomId].users[userId];
+      
+      socket.leave(roomId);
+      
+      io.to(roomId).emit('user-disconnected', userId);
+      io.to(roomId).emit('update-users', Object.values(rooms[roomId].users));
+      console.log(`User ${username} (${userId}) left room ${roomId}`);
+
+      if (Object.keys(rooms[roomId].users).length === 0) {
+        delete rooms[roomId];
+        console.log(`Room ${roomId} deleted (empty)`);
+      }
+    }
+  });
+
   socket.on('disconnecting', () => {
     const roomsJoined = [...socket.rooms];
     roomsJoined.forEach(roomId => {
+      // Skip the socket's own room (socket.id is always in socket.rooms)
+      if (roomId === socket.id) return;
+      
       if (rooms[roomId]) {
         // Find user ID by socket ID
         const userId = Object.keys(rooms[roomId].users).find(key => rooms[roomId].users[key].socketId === socket.id);
