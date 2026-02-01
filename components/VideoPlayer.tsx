@@ -14,6 +14,7 @@ export default function VideoPlayer({ videoState, onStateChange, userId }: Video
   const [isReady, setIsReady] = useState(false);
   const [lastSeekTime, setLastSeekTime] = useState<number | null>(null);
   const isSeeking = useRef(false);
+  const lastBroadcastTime = useRef<number>(0);
 
   // Sync videoState.url to local state only when it comes from another user
   // This allows the current user to freely edit their input field
@@ -35,7 +36,7 @@ export default function VideoPlayer({ videoState, onStateChange, userId }: Video
     const targetTime = videoState.playedSeconds || 0;
 
     // If the video state was updated by another user and there's a significant time difference, seek to sync
-    if (videoState.updatedBy !== userId && Math.abs(currentTime - targetTime) > 0.5) {
+    if (videoState.updatedBy !== userId && Math.abs(currentTime - targetTime) > 1.5) {
       console.log(`[Sync] Seeking from ${currentTime.toFixed(2)}s to ${targetTime.toFixed(2)}s (updated by other user)`);
       isSeeking.current = true;
       playerRef.current.seekTo(targetTime, 'seconds');
@@ -96,13 +97,17 @@ export default function VideoPlayer({ videoState, onStateChange, userId }: Video
             onPlay={() => {
               if (!isSeeking.current) {
                 console.log('[Event] Play pressed');
-                onStateChange({ isPlaying: true, playedSeconds: playerRef.current?.getCurrentTime() || 0 });
+                const currentTime = playerRef.current?.getCurrentTime() || 0;
+                onStateChange({ isPlaying: true, playedSeconds: currentTime });
+                lastBroadcastTime.current = Date.now();
               }
             }}
             onPause={() => {
               if (!isSeeking.current) {
                 console.log('[Event] Pause pressed');
-                onStateChange({ isPlaying: false, playedSeconds: playerRef.current?.getCurrentTime() || 0 });
+                const currentTime = playerRef.current?.getCurrentTime() || 0;
+                onStateChange({ isPlaying: false, playedSeconds: currentTime });
+                lastBroadcastTime.current = Date.now();
               }
             }}
             onSeek={(seconds: number) => {
@@ -114,16 +119,21 @@ export default function VideoPlayer({ videoState, onStateChange, userId }: Video
                   playedSeconds: seconds,
                   isPlaying: videoState?.isPlaying ?? false
                 });
+                lastBroadcastTime.current = Date.now();
               }
             }}
             onProgress={({ playedSeconds }) => {
               // Periodically broadcast playback position to keep everyone in sync
               if (!isSeeking.current && videoState?.isPlaying) {
+                const now = Date.now();
+                const timeSinceLastBroadcast = (now - lastBroadcastTime.current) / 1000;
                 const drift = Math.abs(playedSeconds - (videoState?.playedSeconds || 0));
-                // Broadcast position every 5 seconds of drift to reduce network traffic but maintain sync
-                if (drift > 2) {
-                  console.log(`[Progress] Broadcasting position: ${playedSeconds.toFixed(2)}s (drift: ${drift.toFixed(2)}s)`);
+                
+                // Broadcast if: significant drift (>3s) OR it's been 10 seconds since last broadcast
+                if (drift > 3 || timeSinceLastBroadcast > 10) {
+                  console.log(`[Progress] Broadcasting position: ${playedSeconds.toFixed(2)}s (drift: ${drift.toFixed(2)}s, time since last: ${timeSinceLastBroadcast.toFixed(1)}s)`);
                   onStateChange({ playedSeconds });
+                  lastBroadcastTime.current = now;
                 }
               }
             }}

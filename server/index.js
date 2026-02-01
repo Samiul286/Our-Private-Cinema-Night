@@ -34,7 +34,7 @@ io.on('connection', (socket) => {
     if (!rooms[roomId]) {
       rooms[roomId] = {
         users: {},
-        videoState: { isPlaying: false, currentTime: 0, url: '', timestamp: Date.now() },
+        videoState: { isPlaying: false, playedSeconds: 0, url: '', lastUpdated: Date.now(), updatedBy: '' },
         messages: []
       };
     }
