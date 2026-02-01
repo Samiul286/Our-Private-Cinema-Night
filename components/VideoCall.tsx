@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { User } from '@/types';
 
@@ -37,7 +37,27 @@ export default function VideoCall({ roomId, userId, users, onLeave }: VideoCallP
     useEffect(() => {
         if (localStream && localVideoRef.current) {
             localVideoRef.current.srcObject = localStream;
+            
+            // Ensure local video plays
+            localVideoRef.current.play().catch(err => {
+                console.error('Error playing local video:', err);
+            });
         }
+    }, [localStream]);
+
+    // Handle page visibility to restart video playback
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (!document.hidden && localVideoRef.current && localStream) {
+                // Resume video playback when page becomes visible
+                localVideoRef.current.play().catch(err => {
+                    console.error('Error resuming local video:', err);
+                });
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, [localStream]);
 
     useEffect(() => {
@@ -174,19 +194,59 @@ export default function VideoCall({ roomId, userId, users, onLeave }: VideoCallP
 
 function RemoteVideo({ stream }: { stream: MediaStream }) {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
 
     useEffect(() => {
-        if (videoRef.current) {
+        if (videoRef.current && stream) {
             videoRef.current.srcObject = stream;
+            
+            // Ensure video plays after stream is set
+            const playVideo = async () => {
+                try {
+                    await videoRef.current?.play();
+                    setIsPlaying(true);
+                } catch (err) {
+                    console.error('Error playing remote video:', err);
+                    setIsPlaying(false);
+                }
+            };
+            
+            playVideo();
+
+            // Monitor track status
+            const handleTrackEnded = () => {
+                console.log('Remote track ended');
+                setIsPlaying(false);
+            };
+
+            stream.getTracks().forEach(track => {
+                track.addEventListener('ended', handleTrackEnded);
+            });
+
+            return () => {
+                stream.getTracks().forEach(track => {
+                    track.removeEventListener('ended', handleTrackEnded);
+                });
+            };
         }
     }, [stream]);
 
     return (
-        <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            className="w-full h-full object-cover transform transition-transform group-hover:scale-105"
-        />
+        <>
+            <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover transform transition-transform group-hover:scale-105"
+            />
+            {!isPlaying && (
+                <div className="absolute inset-0 flex items-center justify-center bg-couple-text/80 backdrop-blur-sm">
+                    <div className="text-center">
+                        <div className="w-12 h-12 rounded-full border-2 border-couple-pink border-t-transparent animate-spin mb-2 mx-auto"></div>
+                        <span className="text-xs text-white font-bold">Reconnecting...</span>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }

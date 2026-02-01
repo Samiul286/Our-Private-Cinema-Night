@@ -17,6 +17,8 @@ export const useWebRTC = (roomId: string, userId: string) => {
 
   const peerConnections = useRef<{ [peerId: string]: RTCPeerConnection }>({});
   const localStreamRef = useRef<MediaStream | null>(null);
+  const reconnectTimeouts = useRef<{ [peerId: string]: NodeJS.Timeout }>({});
+  const isPageVisible = useRef(true);
 
   const configuration = {
     iceServers: [
@@ -281,6 +283,140 @@ export const useWebRTC = (roomId: string, userId: string) => {
       }
     }
   }, []);
+
+  // Reconnect a specific peer connection
+  const reconnectPeer = useCallback(async (peerId: string) => {
+    console.log(`Attempting to reconnect to peer: ${peerId}`);
+    
+    // Clear any existing reconnect timeout
+    if (reconnectTimeouts.current[peerId]) {
+      clearTimeout(reconnectTimeouts.current[peerId]);
+      delete reconnectTimeouts.current[peerId];
+    }
+
+    // Clean up old connection
+    cleanupPeerConnection(peerId);
+
+    // Wait a bit before reconnecting
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Reinitiate the call if we're the initiator
+    if (userId < peerId) {
+      console.log(`Reinitiating call to ${peerId}`);
+      startCall(peerId);
+    }
+  }, [userId, cleanupPeerConnection, startCall]);
+
+  // Monitor connection health and reconnect if needed
+  useEffect(() => {
+    const checkInterval = setInterval(() => {
+      if (!isPageVisible.current) return;
+
+      Object.entries(peerConnections.current).forEach(([peerId, pc]) => {
+        const state = pc.connectionState;
+        
+        if (state === 'failed' || state === 'disconnected') {
+          console.log(`Connection ${state} for peer ${peerId}, scheduling reconnect`);
+          
+          // Avoid multiple reconnect attempts
+          if (!reconnectTimeouts.current[peerId]) {
+            reconnectTimeouts.current[peerId] = setTimeout(() => {
+              reconnectPeer(peerId);
+            }, 2000);
+          }
+        }
+      });
+    }, 3000);
+
+    return () => clearInterval(checkInterval);
+  }, [reconnectPeer]);
+
+  // Handle page visibility changes
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      const isVisible = !document.hidden;
+      isPageVisible.current = isVisible;
+
+      if (isVisible) {
+        console.log('Page became visible, checking connections...');
+        
+        // Wait a moment for browser to restore resources
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Check if local stream tracks are still active
+        if (localStreamRef.current) {
+          const videoTrack = localStreamRef.current.getVideoTracks()[0];
+          const audioTrack = localStreamRef.current.getAudioTracks()[0];
+
+          // Restart tracks if they're ended
+          if ((videoTrack && videoTrack.readyState === 'ended') || 
+              (audioTrack && audioTrack.readyState === 'ended')) {
+            console.log('Local stream tracks ended, reinitializing media...');
+            const newStream = await initializeMedia();
+            
+            if (newStream) {
+              // Replace tracks in all peer connections
+              Object.values(peerConnections.current).forEach(pc => {
+                const senders = pc.getSenders();
+                newStream.getTracks().forEach(track => {
+                  const sender = senders.find(s => s.track?.kind === track.kind);
+                  if (sender) {
+                    sender.replaceTrack(track).catch(err => 
+                      console.error('Error replacing track:', err)
+                    );
+                  }
+                });
+              });
+            }
+          }
+        }
+
+        // Check all peer connections and reconnect if needed
+        Object.entries(peerConnections.current).forEach(([peerId, pc]) => {
+          const state = pc.connectionState;
+          console.log(`Peer ${peerId} connection state: ${state}`);
+          
+          if (state === 'failed' || state === 'disconnected' || state === 'closed') {
+            reconnectPeer(peerId);
+          } else if (state === 'connected') {
+            // Verify we're still receiving data
+            const receivers = pc.getReceivers();
+            const hasActiveTrack = receivers.some(r => r.track && r.track.readyState === 'live');
+            
+            if (!hasActiveTrack && !remoteStreams[peerId]) {
+              console.log(`No active tracks for peer ${peerId}, reconnecting...`);
+              reconnectPeer(peerId);
+            }
+          }
+        });
+      } else {
+        console.log('Page hidden');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      // Clear all reconnect timeouts
+      Object.values(reconnectTimeouts.current).forEach(timeout => clearTimeout(timeout));
+    };
+  }, [initializeMedia, reconnectPeer, remoteStreams]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Stop all tracks
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      
+      // Close all peer connections
+      Object.keys(peerConnections.current).forEach(peerId => {
+        cleanupPeerConnection(peerId);
+      });
+    };
+  }, [cleanupPeerConnection]);
 
   return {
     localStream,
