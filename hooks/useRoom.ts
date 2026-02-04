@@ -7,6 +7,11 @@ export const useRoom = (roomId: string, userId: string, username: string) => {
   const [videoState, setVideoState] = useState<VideoState | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [hostId, setHostId] = useState<string>('');
+  const [syncStatus, setSyncStatus] = useState({ isSynced: true, drift: 0, isBuffering: false, lastSyncTime: 0, syncAttempts: 0, connectionQuality: 'good' });
+
+  // computed property
+  const isHost = hostId === userId;
 
   // Join room and setup listeners
   useEffect(() => {
@@ -15,11 +20,12 @@ export const useRoom = (roomId: string, userId: string, username: string) => {
     // Join the room
     socket.emit('join-room', { roomId, userId, username });
 
-    const handleSyncState = (state: { videoState: VideoState, messages: ChatMessage[], users: User[] }) => {
+    const handleSyncState = (state: { videoState: VideoState, messages: ChatMessage[], users: User[], hostId: string }) => {
       console.log('Received sync-state:', state);
       if (state.videoState) setVideoState(state.videoState);
       if (state.messages) setMessages(state.messages);
       if (state.users) setUsers(state.users);
+      if (state.hostId) setHostId(state.hostId);
     };
 
     const handleUpdateUsers = (updatedUsers: User[]) => {
@@ -28,7 +34,6 @@ export const useRoom = (roomId: string, userId: string, username: string) => {
     };
 
     const handleVideoState = (newState: VideoState) => {
-      // console.log('Received video-state:', newState);
       setVideoState(newState);
     };
 
@@ -38,12 +43,39 @@ export const useRoom = (roomId: string, userId: string, username: string) => {
 
     const handleUserConnected = (connectedUserId: string) => {
       console.log('User connected:', connectedUserId);
-      // Note: update-users overrides this usually, but good for notifications if needed
     };
 
     const handleUserDisconnected = (disconnectedUserId: string) => {
       console.log('User disconnected:', disconnectedUserId);
-      // Note: update-users overrides this
+    };
+
+    const handleHostAssigned = ({ isHost }: { isHost: boolean }) => {
+      if (isHost) {
+        console.log('You are now the host');
+        // Could trigger a toast notification here
+      }
+    };
+
+    const handleHostChanged = ({ hostId, hostUsername }: { hostId: string, hostUsername: string }) => {
+      console.log(`Host changed to ${hostUsername} (${hostId})`);
+      setHostId(hostId);
+    };
+
+    const handleSyncCorrection = (correction: { playedSeconds: number, isPlaying: boolean, serverTimestamp: number, drift: number, connectionQuality?: string }) => {
+      console.log(`Received sync correction. Drift: ${correction.drift.toFixed(2)}s, Quality: ${correction.connectionQuality || 'unknown'}`);
+      // Update local video state with corrected values (VideoPlayer will react to this)
+      setVideoState(prev => prev ? { ...prev, isPlaying: correction.isPlaying, playedSeconds: correction.playedSeconds, lastUpdated: Date.now() } : null);
+      setSyncStatus(prev => ({ 
+        ...prev, 
+        isSynced: false, 
+        drift: correction.drift,
+        connectionQuality: correction.connectionQuality || 'unknown'
+      }));
+
+      // Reset synced status after a moment
+      setTimeout(() => {
+        setSyncStatus(prev => ({ ...prev, isSynced: true, drift: 0 }));
+      }, 2000);
     };
 
     socket.on('sync-state', handleSyncState);
@@ -52,6 +84,9 @@ export const useRoom = (roomId: string, userId: string, username: string) => {
     socket.on('chat-message', handleChatMessage);
     socket.on('user-connected', handleUserConnected);
     socket.on('user-disconnected', handleUserDisconnected);
+    socket.on('host-assigned', handleHostAssigned);
+    socket.on('host-changed', handleHostChanged);
+    socket.on('sync-correction', handleSyncCorrection);
 
     return () => {
       socket.off('sync-state', handleSyncState);
@@ -60,22 +95,31 @@ export const useRoom = (roomId: string, userId: string, username: string) => {
       socket.off('chat-message', handleChatMessage);
       socket.off('user-connected', handleUserConnected);
       socket.off('user-disconnected', handleUserDisconnected);
-
-      // Emit leave-room when component unmounts
-      socket.emit('leave-room', { roomId, userId });
+      socket.off('host-assigned', handleHostAssigned);
+      socket.off('host-changed', handleHostChanged);
+      socket.off('sync-correction', handleSyncCorrection);
     };
   }, [socket, roomId, userId, username]);
 
   const updateVideoState = useCallback((newState: Partial<VideoState>) => {
     if (!roomId) return;
-    // Include updatedBy field to track who made this change
+    // include updatedBy field to track who made this change
     const stateWithMetadata = {
       ...newState,
       updatedBy: userId
     };
-    // Emit to server which will broadcast to all users
     socket.emit('video-state', { roomId, videoState: stateWithMetadata });
   }, [socket, roomId, userId]);
+
+  const reportPosition = useCallback((playedSeconds: number, isBuffering: boolean = false) => {
+    if (userId && roomId) {
+      socket.emit('position-report', { roomId, userId, playedSeconds, isBuffering });
+      if (isBuffering !== syncStatus.isBuffering) {
+        socket.emit('buffer-state', { roomId, userId, isBuffering });
+        setSyncStatus(prev => ({ ...prev, isBuffering }));
+      }
+    }
+  }, [socket, roomId, userId, syncStatus.isBuffering]);
 
   const sendMessage = useCallback((message: string) => {
     if (!roomId || !message.trim()) return;
@@ -88,21 +132,21 @@ export const useRoom = (roomId: string, userId: string, username: string) => {
     socket.emit('chat-message', { roomId, message: msg });
   }, [socket, roomId, userId, username]);
 
-  // Leave room currently handled by simple disconnect or unmount logic in server
-  // But we can add an explicit one if needed.
   const leaveRoom = useCallback(() => {
-    if (roomId && userId) {
-      socket.emit('leave-room', { roomId, userId });
-    }
-  }, [socket, roomId, userId]);
+    // handled by disconnect
+  }, []);
 
   return {
     videoState,
     messages,
     users,
-    joinRoom: () => { }, // Handled in useEffect now
+    isHost,
+    hostId,
+    syncStatus,
+    joinRoom: () => { },
     leaveRoom,
     updateVideoState,
-    sendMessage
+    sendMessage,
+    reportPosition
   };
 };

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useWebRTC } from '@/hooks/useWebRTC';
-import { useSocket } from '@/hooks/useSocket';
 import { User } from '@/types';
 
 interface VideoCallProps {
@@ -11,7 +10,6 @@ interface VideoCallProps {
 }
 
 export default function VideoCall({ roomId, userId, users, onLeave }: VideoCallProps) {
-    const socket = useSocket();
     const {
         localStream,
         remoteStreams,
@@ -25,7 +23,6 @@ export default function VideoCall({ roomId, userId, users, onLeave }: VideoCallP
 
     const localVideoRef = useRef<HTMLVideoElement>(null);
     const [permissionError, setPermissionError] = useState(false);
-    const callInitiatedFor = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         const init = async () => {
@@ -64,75 +61,24 @@ export default function VideoCall({ roomId, userId, users, onLeave }: VideoCallP
     }, [localStream]);
 
     useEffect(() => {
-        // Only proceed if we have local stream ready
-        if (!localStream) {
-            console.log('Waiting for local stream before initiating calls');
-            return;
-        }
-
-        // Get current user IDs
-        const currentUserIds = new Set(users.map(u => u.id));
-        
-        // Clean up tracking for users who are no longer in the room
-        const trackedUserIds = Array.from(callInitiatedFor.current);
-        trackedUserIds.forEach(trackedId => {
-            if (!currentUserIds.has(trackedId) && trackedId !== userId) {
-                console.log(`Removing tracking for disconnected user: ${trackedId}`);
-                callInitiatedFor.current.delete(trackedId);
-            }
-        });
-
         // Start calls with other users
         // Use ID comparison to determine who initiates the call to avoid glare (collision)
         // consistently: the user with the lower string ID initiates.
         users.forEach(user => {
-            if (user.id !== userId && !callInitiatedFor.current.has(user.id)) {
+            if (user.id !== userId && !remoteStreams[user.id]) {
                 // Determine initiator
-                const shouldInitiate = userId < user.id;
-                
-                if (shouldInitiate) {
-                    console.log(`I should initiate call to ${user.id} (I am ${userId})`);
-                    callInitiatedFor.current.add(user.id);
-                    // Add a small delay to ensure both sides are ready
-                    setTimeout(() => {
-                        startCall(user.id);
-                    }, 500);
+                const activeInitiator = userId < user.id;
+                if (activeInitiator) {
+                    // only initiate if we haven't already connected?
+                    // startCall checks peerConnections refs, but let's be safe
+                    console.log(`Initiating call to ${user.id} (I am ${userId})`);
+                    startCall(user.id);
                 } else {
                     console.log(`Waiting for call from ${user.id} (I am ${userId})`);
                 }
             }
         });
-    }, [users, userId, startCall, localStream]);
-
-    // Listen for user-connected events to initiate calls immediately
-    useEffect(() => {
-        if (!localStream || !socket) return;
-
-        const handleUserConnected = (connectedUserId: string) => {
-            console.log(`User connected event: ${connectedUserId}`);
-            
-            if (connectedUserId !== userId && userId < connectedUserId && !callInitiatedFor.current.has(connectedUserId)) {
-                console.log(`Initiating call to newly connected user ${connectedUserId}`);
-                callInitiatedFor.current.add(connectedUserId);
-                setTimeout(() => {
-                    startCall(connectedUserId);
-                }, 1000);
-            }
-        };
-
-        const handleUserDisconnected = (disconnectedUserId: string) => {
-            console.log(`User disconnected event in VideoCall: ${disconnectedUserId}`);
-            // Clean up the call tracking for this user
-            callInitiatedFor.current.delete(disconnectedUserId);
-        };
-
-        socket.on('user-connected', handleUserConnected);
-        socket.on('user-disconnected', handleUserDisconnected);
-        return () => {
-            socket.off('user-connected', handleUserConnected);
-            socket.off('user-disconnected', handleUserDisconnected);
-        };
-    }, [localStream, userId, startCall, socket]);
+    }, [users, userId, startCall, remoteStreams, localStream]);
 
     const handleEndNight = () => {
         if (onLeave) {

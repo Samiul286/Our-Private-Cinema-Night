@@ -37,7 +37,10 @@ export default function Room() {
     joinRoom,
     leaveRoom,
     updateVideoState,
-    sendMessage
+    sendMessage,
+    isHost,
+    syncStatus,
+    reportPosition
   } = useRoom(roomId as string, userId, username);
 
   useEffect(() => {
@@ -151,6 +154,9 @@ export default function Room() {
                 videoState={videoState}
                 onStateChange={updateVideoState}
                 userId={userId}
+                isHost={isHost}
+                syncStatus={syncStatus}
+                onReportPosition={reportPosition}
               />
             </div>
           </div>
